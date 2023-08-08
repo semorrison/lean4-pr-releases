@@ -205,7 +205,7 @@ jobs:
           dir=$(echo lean-*)
           mkdir pack
           # high-compression tar.zst + zip for release, fast tar.zst otherwise
-          if [[ '${{ startsWith(github.ref, 'refs/tags/') && matrix.release }}' == true || -n '${{ needs.set-nightly.outputs.nightly }}' ]]; then
+          if [[ '${{ matrix.release }}' == true || -n '${{ needs.set-nightly.outputs.nightly }}' ]]; then
             ${{ matrix.tar || 'tar' }} cf - $dir | zstd -T0 --no-progress -19 -o pack/$dir.tar.zst
             zip -rq pack/$dir.zip $dir
           else

@@ -1,0 +1,53 @@
+name: PR release
+
+on:
+  workflow_run: # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#workflow_run
+    workflows: [CI]
+    types: [completed]
+
+jobs:
+  on-success:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Retrieve information about the original workflow
+        uses: potiuk/get-workflow-origin@v1_1 # https://github.com/marketplace/actions/get-workflow-origin
+        id: workflow-info
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sourceRunId: ${{ github.event.workflow_run.id }}
+      - name: Download artifact from the previous workflow.
+        # Only proceed if the previous workflow had a pull request number.
+        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
+        id: download-artifact
+        uses: dawidd6/action-download-artifact@v2 # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          path: artifacts
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.PR_RELEASES_TOKEN }}
+          # We only need to checkout for tagging, so depth 0 is fine:
+          fetch-depth: 0
+      - name: Prepare release
+        run: |
+          git remote add pr-releases https://foo:'${{ secrets.PR_RELEASES_TOKEN }}'@github.com/${{ github.repository_owner }}/lean4-pr-releases.git
+          # Try to delete any existing release for the current PR.
+          gh release delete --repo ${{ github.repository_owner }}/lean4-pr-releases pr-release-${{ steps.workflow-info.outputs.pullRequestNumber }} -y || true
+          git tag -f pr-release-${{ steps.workflow-info.outputs.pullRequestNumber }}
+          git push -f pr-releases pr-release-${{ steps.workflow-info.outputs.pullRequestNumber }}
+        env:
+          GH_TOKEN: ${{ secrets.PR_RELEASES_TOKEN }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Draft release for PR ${{ steps.workflow-info.outputs.pullRequestNumber }}
+          files: artifacts/*/*
+          fail_on_unmatched_files: true
+          draft: false
+          tag_name: pr-release-${{ steps.workflow-info.outputs.pullRequestNumber }}
+          repository: ${{ github.repository_owner }}/lean4-pr-releases
+        env:
+          # The token used here must have `workflow` privileges.
+          GITHUB_TOKEN: ${{ secrets.PR_RELEASES_TOKEN }}
