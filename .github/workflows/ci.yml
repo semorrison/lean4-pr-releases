@@ -50,6 +50,17 @@ jobs:
       matrix:
         include:
           # portable release build: use channel with older glibc (2.27)
+          - name: Linux LLVM
+            os: ubuntu-latest
+            release: false
+            shell: nix-shell --arg pkgsDist "import (fetchTarball \"channel:nixos-19.03\") {{}}" --run "bash -euxo pipefail {0}"
+            llvm-url: https://github.com/leanprover/lean-llvm/releases/download/15.0.1/lean-llvm-x86_64-linux-gnu.tar.zst
+            prepare-llvm: ../script/prepare-llvm-linux.sh lean-llvm*
+            binary-check: ldd -v
+            # foreign code may be linked against more recent glibc
+            # reverse-ffi needs to be updated to link to LLVM libraries
+            CTEST_OPTIONS: -E 'foreign|leanlaketest_reverse-ffi'
+            CMAKE_OPTIONS: -DLLVM=ON -DLLVM_CONFIG=${GITHUB_WORKSPACE}/build/llvm-host/bin/llvm-config
           - name: Linux release
             os: ubuntu-latest
             release: true
@@ -58,7 +69,7 @@ jobs:
             prepare-llvm: ../script/prepare-llvm-linux.sh lean-llvm*
             binary-check: ldd -v
             # foreign code may be linked against more recent glibc
-            CTEST_OPTIONS: -E 'foreign|leanlaketest_git'
+            CTEST_OPTIONS: -E 'foreign'
           - name: Linux
             os: ubuntu-latest
             check-stage3: true
@@ -194,7 +205,7 @@ jobs:
           dir=$(echo lean-*)
           mkdir pack
           # high-compression tar.zst + zip for release, fast tar.zst otherwise
-          if [[ '${{ startsWith(github.ref, 'refs/tags/') && matrix.release }}' == true || -n '${{ needs.set-nightly.outputs.nightly }}' ]]; then
+          if [[ '${{ matrix.release }}' == true || -n '${{ needs.set-nightly.outputs.nightly }}' ]]; then
             ${{ matrix.tar || 'tar' }} cf - $dir | zstd -T0 --no-progress -19 -o pack/$dir.tar.zst
             zip -rq pack/$dir.zip $dir
           else
@@ -282,6 +293,42 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  pr-release:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.PR_RELEASE_TOKEN }}
+          # needed for tagging
+          fetch-depth: 0
+      - uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: Prepare release
+        run: |
+          git remote add pr-releases https://foo:'${{ secrets.PR_RELEASE_TOKEN }}'@github.com/${{ github.repository_owner }}/lean4-pr-releases.git
+          # Try to delete any existing release for the current PR.
+          gh release delete --repo ${{ github.repository_owner }}/lean4-pr-releases pr-release-${{ github.event.number }} -y || true
+          git tag -f pr-release-${{ github.event.number }}
+          git push -f pr-releases pr-release-${{ github.event.number }}
+        env:
+          GH_TOKEN: ${{ secrets.PR_RELEASE_TOKEN }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Draft release for PR ${{ github.event.number }}
+          files: artifacts/*/*
+          fail_on_unmatched_files: true
+          draft: false
+          tag_name: pr-release-${{ github.event.number }}
+          repository: ${{ github.repository_owner }}/lean4-pr-releases
+        env:
+          # The token used here must have `workflow` privileges.
+          GITHUB_TOKEN: ${{ secrets.PR_RELEASE_TOKEN }}
 
   release-nightly:
     needs: [set-nightly, build]

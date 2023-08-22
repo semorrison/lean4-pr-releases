@@ -268,8 +268,9 @@ extern "C" LEAN_EXPORT obj_res lean_io_prim_handle_mk(b_obj_arg filename, uint8 
     switch (mode) {
     case 0: flags |= O_RDONLY; break;  // read
     case 1: flags |= O_WRONLY | O_CREAT | O_TRUNC; break;  // write
-    case 2: flags |= O_RDWR; break;  // readWrite
-    case 3: flags |= O_WRONLY | O_CREAT | O_APPEND; break;  // append
+    case 2: flags |= O_WRONLY | O_CREAT | O_TRUNC | O_EXCL; break;  // writeNew
+    case 3: flags |= O_RDWR; break;  // readWrite
+    case 4: flags |= O_WRONLY | O_CREAT | O_APPEND; break;  // append
     }
     int fd = open(lean_string_cstr(filename), flags, 0666);
     if (fd == -1) {
@@ -279,8 +280,9 @@ extern "C" LEAN_EXPORT obj_res lean_io_prim_handle_mk(b_obj_arg filename, uint8 
     switch (mode) {
     case 0: fp_mode = "r"; break;  // read
     case 1: fp_mode = "w"; break;  // write
-    case 2: fp_mode = "r+"; break;  // readWrite
-    case 3: fp_mode = "a"; break;  // append
+    case 2: fp_mode = "w"; break;  // writeNew
+    case 3: fp_mode = "r+"; break;  // readWrite
+    case 4: fp_mode = "a"; break;  // append
     }
     FILE * fp = fdopen(fd, fp_mode);
     if (!fp) {
@@ -657,7 +659,7 @@ extern "C" LEAN_EXPORT obj_res lean_io_remove_dir(b_obj_arg p, obj_arg) {
     }
 }
 
-extern "C" LEAN_EXPORT obj_res lean_io_rename(b_obj_arg from, b_obj_arg to) {
+extern "C" LEAN_EXPORT obj_res lean_io_rename(b_obj_arg from, b_obj_arg to, lean_object * /* w */) {
     if (std::rename(string_cstr(from), string_cstr(to)) == 0) {
         return io_result_mk_ok(box(0));
     } else {

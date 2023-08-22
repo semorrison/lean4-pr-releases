@@ -278,8 +278,8 @@ protected def update : CliM PUnit := do
   processOptions lakeOption
   let opts ← getThe LakeOptions
   let config ← mkLoadConfig opts
-  noArgsRem do
-    liftM <| (updateManifest config).run (MonadLog.io opts.verbosity)
+  let toUpdate := (← getArgs).foldl (·.insert <| stringToLegalOrSimpleName ·) {}
+  liftM <| (updateManifest config toUpdate).run (MonadLog.io opts.verbosity)
 
 protected def upload : CliM PUnit := do
   processOptions lakeOption
@@ -299,7 +299,16 @@ protected def printPaths : CliM PUnit := do
 protected def clean : CliM PUnit := do
   processOptions lakeOption
   let config ← mkLoadConfig (← getThe LakeOptions)
-  noArgsRem do (← loadWorkspace config).clean
+  let ws ← loadWorkspace config
+  let pkgSpecs ← takeArgs
+  if pkgSpecs.isEmpty then
+    ws.clean
+  else
+    let pkgs ← pkgSpecs.mapM fun pkgSpec =>
+      match ws.findPackage? <| stringToLegalOrSimpleName pkgSpec with
+      | none => throw <| .unknownPackage pkgSpec
+      | some pkg => pure pkg.toPackage
+    pkgs.forM (·.clean)
 
 protected def script : CliM PUnit := do
   if let some cmd ← takeArg? then
