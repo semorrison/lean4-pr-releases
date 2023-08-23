@@ -16,25 +16,21 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           sourceRunId: ${{ github.event.workflow_run.id }}
-      - name: Download artifact from the previous workflow.
-        # Only proceed if the previous workflow had a pull request number.
-        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
-        id: download-artifact
-        uses: dawidd6/action-download-artifact@v2 # https://github.com/marketplace/actions/download-workflow-artifact
-        with:
-          run_id: ${{ github.event.workflow_run.id }}
-          path: artifacts
-      - name: what did we download?
-        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
-        run: |
-          find .
       - name: Checkout
+        # Only proceed if the previous workflow had a pull request number.
         if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.PR_RELEASES_TOKEN }}
           # We only need to checkout for tagging, so depth 0 is fine:
           fetch-depth: 0
+      - name: Download artifact from the previous workflow.
+        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
+        id: download-artifact
+        uses: dawidd6/action-download-artifact@v2 # https://github.com/marketplace/actions/download-workflow-artifact
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          path: artifacts
       - name: Prepare release
         if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
         run: |
@@ -50,7 +46,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           name: Draft release for PR ${{ steps.workflow-info.outputs.pullRequestNumber }}
-          files: artifacts/*
+          # There are coredumps files here as well, but all in deeper subdirectories.
+          files: artifacts/*/*
           fail_on_unmatched_files: true
           draft: false
           tag_name: pr-release-${{ steps.workflow-info.outputs.pullRequestNumber }}
