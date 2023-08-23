@@ -50,7 +50,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           name: Draft release for PR ${{ steps.workflow-info.outputs.pullRequestNumber }}
-          files: artifacts/*/*
+          files: artifacts/*
           fail_on_unmatched_files: true
           draft: false
           tag_name: pr-release-${{ steps.workflow-info.outputs.pullRequestNumber }}
