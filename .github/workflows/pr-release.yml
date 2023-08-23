@@ -24,13 +24,19 @@ jobs:
         with:
           run_id: ${{ github.event.workflow_run.id }}
           path: artifacts
+      - name: what did we download?
+        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
+        run: |
+          find .
       - name: Checkout
+        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.PR_RELEASES_TOKEN }}
           # We only need to checkout for tagging, so depth 0 is fine:
           fetch-depth: 0
       - name: Prepare release
+        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
         run: |
           git remote add pr-releases https://foo:'${{ secrets.PR_RELEASES_TOKEN }}'@github.com/${{ github.repository_owner }}/lean4-pr-releases.git
           # Try to delete any existing release for the current PR.
@@ -40,6 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PR_RELEASES_TOKEN }}
       - name: Release
+        if: ${{ steps.workflow-info.outputs.pullRequestNumber != '' }}
         uses: softprops/action-gh-release@v1
         with:
           name: Draft release for PR ${{ steps.workflow-info.outputs.pullRequestNumber }}
